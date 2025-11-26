@@ -1,5 +1,6 @@
 import pygame
 import sys
+import asyncio
 
 # --- Initialization ---
 pygame.init()
@@ -27,7 +28,6 @@ JUMP_FORCE = -16
 ENEMY_SPEED = 2
 
 # --- Level Design (Map) ---
-# W = Ground/Brick, P = Pipe, M = Mushroom, S = Star, E = Enemy, F = Flag
 LEVEL_MAP = [
     "                                                                                ",
     "                                                                                ",
@@ -58,11 +58,9 @@ class Camera:
     def update(self, target):
         # Center the camera on the player
         x = -target.rect.x + int(SCREEN_WIDTH / 2)
-        
         # Stop camera from scrolling past the start or end of the level
-        x = min(0, x) 
+        x = min(0, x)
         x = max(-(self.width - SCREEN_WIDTH), x)
-        
         self.camera = pygame.Rect(x, 0, self.width, self.height)
 
 class Entity(pygame.sprite.Sprite):
@@ -84,6 +82,9 @@ class Player(Entity):
         self.is_invincible = False
         self.invincible_timer = 0
         self.score = 0
+        self.type = None  # current power-up type (None / 'mushroom' / 'star')
+        # keep a stable "x" storage for resizing logic
+        self.x_pos_temp = self.rect.x
 
     def get_input(self):
         keys = pygame.key.get_pressed()
@@ -97,43 +98,51 @@ class Player(Entity):
                 self.vy = JUMP_FORCE
                 self.is_jumping = True
 
-    def power_up(self, type):
-        if type == 'mushroom':
+    def power_up(self, type_):
+        # Save type
+        self.type = type_
+        # Save current bottom so we can preserve feet location when resizing
+        old_bottom = self.rect.bottom
+        old_x = self.rect.x
+
+        if type_ == 'mushroom':
             self.is_big = True
             self.score += 100
-            # Grow logic
+            # Grow logic: make taller but keep feet on same y
             self.image = pygame.Surface([30, 60])
             self.image.fill(MEDHA_COLOR)
-            # Adjust position so she grows UP, not into the floor
-            old_bottom = self.rect.bottom
             self.rect = self.image.get_rect()
-            self.rect.x = self.x_pos_temp
+            self.rect.x = old_x
             self.rect.bottom = old_bottom
-        
-        if type == 'star':
+
+        elif type_ == 'star':
             self.is_invincible = True
-            self.invincible_timer = 600 # 10 seconds (60fps * 10)
+            self.invincible_timer = FPS * 10  # 10 seconds
             self.score += 500
 
     def take_damage(self):
         if self.is_big:
+            # shrink back to normal
             self.is_big = False
+            old_bottom = self.rect.bottom
+            old_x = self.rect.x
             self.image = pygame.Surface([30, 40])
             self.image.fill(MEDHA_COLOR)
             self.rect = self.image.get_rect()
-            self.is_invincible = True # Temporary mercy invincibility
-            self.invincible_timer = 120 # 2 seconds
-            return False # Still alive
+            self.rect.x = old_x
+            self.rect.bottom = old_bottom
+            self.is_invincible = True
+            self.invincible_timer = FPS * 2  # 2 seconds mercy
+            return False  # still alive
         else:
-            return True # Dead
+            return True  # dead
 
     def update(self, platforms):
         self.get_input()
-        
         # Apply Gravity
         self.vy += GRAVITY
         self.rect.y += self.vy
-        
+
         # Y Collision (Floor/Ceiling)
         for platform in platforms:
             if self.rect.colliderect(platform.rect):
@@ -146,7 +155,8 @@ class Player(Entity):
                     self.vy = 0
 
         self.rect.x += self.vx
-        self.x_pos_temp = self.rect.x 
+        # Keep x_pos_temp updated for power-up resizing fixes
+        self.x_pos_temp = self.rect.x
 
         # X Collision (Walls)
         for platform in platforms:
@@ -156,16 +166,19 @@ class Player(Entity):
                 elif self.vx < 0: # Left
                     self.rect.left = platform.rect.right
 
-        # Powerup Effects
+        # Powerup Effects: invincibility flashing
         if self.is_invincible:
             self.invincible_timer -= 1
-            if self.invincible_timer % 10 < 5: # Flashing effect
+            # Flash effect
+            if (self.invincible_timer // 5) % 2 == 0:
                 self.image.fill(WHITE)
             else:
+                # if star power show star color, else normal color
                 self.image.fill(STAR_COLOR if self.type == 'star' else MEDHA_COLOR)
-            
+
             if self.invincible_timer <= 0:
                 self.is_invincible = False
+                self.type = None
                 self.image.fill(MEDHA_COLOR)
 
 class Enemy(Entity):
@@ -176,7 +189,7 @@ class Enemy(Entity):
     def update(self, platforms):
         self.vy += GRAVITY
         self.rect.y += self.vy
-        
+
         for platform in platforms:
             if self.rect.colliderect(platform.rect):
                 if self.vy > 0:
@@ -184,7 +197,7 @@ class Enemy(Entity):
                     self.vy = 0
 
         self.rect.x += self.vx
-        
+
         # Bounce off walls
         for platform in platforms:
             if self.rect.colliderect(platform.rect):
@@ -192,10 +205,10 @@ class Enemy(Entity):
                 self.rect.x += self.vx
 
 class Item(Entity):
-    def __init__(self, x, y, type):
-        color = MUSHROOM_COLOR if type == 'mushroom' else STAR_COLOR
+    def __init__(self, x, y, type_):
+        color = MUSHROOM_COLOR if type_ == 'mushroom' else STAR_COLOR
         super().__init__(x, y, color, 30, 30)
-        self.type = type
+        self.type = type_
 
 # --- Main Game Functions ---
 
@@ -203,10 +216,10 @@ def draw_text(surface, text, size, x, y, color=WHITE):
     font = pygame.font.SysFont('Arial', size, bold=True)
     text_surface = font.render(text, True, color)
     text_rect = text_surface.get_rect()
-    text_rect.midtop = (x, y)
+    text_rect.midtop = (int(x), int(y))
     surface.blit(text_surface, text_rect)
 
-def main():
+async def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Run-Medha-Run (Super Mario Style)")
     clock = pygame.time.Clock()
@@ -216,7 +229,7 @@ def main():
     platforms = pygame.sprite.Group()
     enemies = pygame.sprite.Group()
     items = pygame.sprite.Group()
-    
+
     player = Player(100, 100)
     all_sprites.add(player)
 
@@ -256,8 +269,8 @@ def main():
     running = True
 
     while running:
-        clock.tick(FPS)
-        
+        dt = clock.tick(FPS)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -265,7 +278,7 @@ def main():
         # --- Update ---
         player.update(platforms)
         camera.update(player)
-        
+
         for e in enemies:
             e.update(platforms)
 
@@ -275,10 +288,10 @@ def main():
             player.power_up(item.type)
 
         # Enemy Collision
-        for enemy in enemies:
+        for enemy in list(enemies):
             if player.rect.colliderect(enemy.rect):
                 # Kill Enemy (Jump on top)
-                if player.vy > 0 and player.rect.bottom < enemy.rect.centery + 15:
+                if player.vy > 0 and player.rect.bottom <= enemy.rect.centery + 15:
                     enemy.kill()
                     player.vy = -10 # Bounce
                     player.score += 100
@@ -292,26 +305,34 @@ def main():
 
         # Win Condition (Reached end of map)
         if player.rect.x > level_width - 250:
+            # Show message non-blocking
+            screen.fill(SKY_BLUE)
             draw_text(screen, "LEVEL CLEARED!", 60, SCREEN_WIDTH/2, SCREEN_HEIGHT/2)
             pygame.display.flip()
-            pygame.time.wait(3000)
+            # non-blocking pause for web: await instead of pygame.time.wait
+            await asyncio.sleep(3)
             running = False
             continue
 
         # --- Draw ---
         screen.fill(SKY_BLUE)
-        
+
         # Draw all sprites adjusted by camera
         for sprite in all_sprites:
             screen.blit(sprite.image, camera.apply(sprite))
-            
+
         # Draw Score (Static UI)
         draw_text(screen, f"Score: {player.score}", 30, 80, 20, BLACK)
 
         pygame.display.flip()
 
+        # Yield control to the browser/event loop (important for pygbag)
+        await asyncio.sleep(0)
+
     pygame.quit()
-    sys.exit()
+    # do not call sys.exit() in a web context - just return
+    return
 
 if __name__ == "__main__":
-    main()
+    # use asyncio.run so the function is compatible with pygbag's event loop
+    asyncio.run(main())
