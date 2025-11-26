@@ -1,5 +1,6 @@
 import pygame
 import sys
+import os
 import random
 
 # --- Initialization ---
@@ -12,57 +13,35 @@ SCREEN_HEIGHT = 600
 FPS = 60
 TILE_SIZE = 50
 
-# Physics
+# Paths
+ASSETS_PATH = os.path.join(os.path.dirname(__file__), "assets")
+
+# --- Load Images ---
+BRICK_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "brick.png")).convert_alpha()
+PIPE_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "pipe.png")).convert_alpha()
+GOOMBA_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "goomba.png")).convert_alpha()
+MEDHA_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "medha.png")).convert_alpha()
+MEDHA_BIG_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "medha_big.png")).convert_alpha()
+MUSHROOM_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "mushroom.png")).convert_alpha()
+STAR_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "coin.png")).convert_alpha()
+FLAG_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "flag.png")).convert_alpha()
+CLOUD_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "cloud.png")).convert_alpha()
+QUESTIONMARK_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "questionmark.png")).convert_alpha()
+PLANT_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "plant.png")).convert_alpha()
+
+# --- Load Sounds (placeholders) ---
+JUMP_SOUND = pygame.mixer.Sound(os.path.join(ASSETS_PATH, "jump.wav")) if os.path.exists(os.path.join(ASSETS_PATH, "jump.wav")) else None
+COIN_SOUND = pygame.mixer.Sound(os.path.join(ASSETS_PATH, "coin.wav")) if os.path.exists(os.path.join(ASSETS_PATH, "coin.wav")) else None
+POWERUP_SOUND = pygame.mixer.Sound(os.path.join(ASSETS_PATH, "powerup.wav")) if os.path.exists(os.path.join(ASSETS_PATH, "powerup.wav")) else None
+HIT_SOUND = pygame.mixer.Sound(os.path.join(ASSETS_PATH, "hit.wav")) if os.path.exists(os.path.join(ASSETS_PATH, "hit.wav")) else None
+
+# --- Physics Settings ---
 GRAVITY = 0.8
 PLAYER_SPEED = 5
 JUMP_FORCE = -16
 ENEMY_SPEED = 2
 
-# Assets Path
-ASSET_PATH = "assets/"
-
-# --- Load Images ---
-IMAGES = {
-    "player_small": pygame.image.load(f"{ASSET_PATH}medha.png").convert_alpha(),
-    "player_big": pygame.image.load(f"{ASSET_PATH}medha_big.png").convert_alpha(),
-    "enemy": pygame.image.load(f"{ASSET_PATH}goomba.png").convert_alpha(),
-    "brick": pygame.image.load(f"{ASSET_PATH}brick.png").convert_alpha(),
-    "pipe": pygame.image.load(f"{ASSET_PATH}pipe.png").convert_alpha(),
-    "mushroom": pygame.image.load(f"{ASSET_PATH}mushroom.png").convert_alpha(),
-    "star": pygame.image.load(f"{ASSET_PATH}star.png").convert_alpha(),
-    "flag": pygame.image.load(f"{ASSET_PATH}flag.png").convert_alpha(),
-    "coin": pygame.image.load(f"{ASSET_PATH}coin.png").convert_alpha(),
-    "plant": pygame.image.load(f"{ASSET_PATH}plant.png").convert_alpha(),
-    "question": pygame.image.load(f"{ASSET_PATH}questionmark.png").convert_alpha(),
-    "cloud": pygame.image.load(f"{ASSET_PATH}cloud.png").convert_alpha()
-}
-
-# --- Load Sounds (placeholder) ---
-SOUNDS = {
-    "jump": pygame.mixer.Sound(pygame.mixer.Sound(pygame.mixer.get_init())),
-    "coin": pygame.mixer.Sound(pygame.mixer.Sound(pygame.mixer.get_init())),
-    "powerup": pygame.mixer.Sound(pygame.mixer.Sound(pygame.mixer.get_init())),
-    "hit": pygame.mixer.Sound(pygame.mixer.Sound(pygame.mixer.get_init())),
-    "level_clear": pygame.mixer.Sound(pygame.mixer.Sound(pygame.mixer.get_init())),
-    "bgm": pygame.mixer.Sound(pygame.mixer.Sound(pygame.mixer.get_init()))
-}
-
-# --- Base Level Template ---
-BASE_LEVEL = [
-    "                                                                                ",
-    "                                                                                ",
-    "                                                                            F   ",
-    "                                                                            F   ",
-    "                       M                   S                                F   ",
-    "                     WWWWW               WWWWW                              F   ",
-    "                                                                   E        F   ",
-    "         E                     E    P                 P          WWWWW    WWWWW ",
-    "      WWWWWWW                WWWWWW P                 P                         ",
-    "                  P                 P                 P                         ",
-    "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW"
-]
-
-# --- Classes ---
+# --- Camera ---
 class Camera:
     def __init__(self, width, height):
         self.camera = pygame.Rect(0, 0, width, height)
@@ -78,21 +57,20 @@ class Camera:
         x = max(-(self.width - SCREEN_WIDTH), x)
         self.camera = pygame.Rect(x, 0, self.width, self.height)
 
-
+# --- Game Entities ---
 class Entity(pygame.sprite.Sprite):
     def __init__(self, x, y, image):
         super().__init__()
         self.image = image
-        self.rect = self.image.get_rect()
-        self.rect.x = x
-        self.rect.y = y
+        self.rect = self.image.get_rect(topleft=(x, y))
         self.vx = 0
         self.vy = 0
 
-
 class Player(Entity):
-    def __init__(self, x, y):
-        super().__init__(x, y, IMAGES["player_small"])
+    def __init__(self, x, y, img_small, img_big):
+        super().__init__(x, y, img_small)
+        self.img_small = img_small
+        self.img_big = img_big
         self.is_jumping = False
         self.is_big = False
         self.is_invincible = False
@@ -106,39 +84,32 @@ class Player(Entity):
             self.vx = -PLAYER_SPEED
         if keys[pygame.K_RIGHT]:
             self.vx = PLAYER_SPEED
-        if keys[pygame.K_SPACE] or keys[pygame.K_UP]:
+        if keys[pygame.K_UP] or keys[pygame.K_SPACE]:
             if not self.is_jumping:
                 self.vy = JUMP_FORCE
                 self.is_jumping = True
-                SOUNDS["jump"].play()
+                if JUMP_SOUND: JUMP_SOUND.play()
 
     def power_up(self, type):
-        if type == "mushroom" and not self.is_big:
+        if type == 'mushroom':
             self.is_big = True
+            self.image = self.img_big
             self.score += 100
-            old_bottom = self.rect.bottom
-            self.image = IMAGES["player_big"]
-            self.rect = self.image.get_rect()
-            self.rect.x = self.x_pos_temp
-            self.rect.bottom = old_bottom
-            SOUNDS["powerup"].play()
-        elif type == "star":
+            if POWERUP_SOUND: POWERUP_SOUND.play()
+        elif type == 'star':
             self.is_invincible = True
             self.invincible_timer = FPS * 10
             self.score += 500
-            SOUNDS["powerup"].play()
+            if POWERUP_SOUND: POWERUP_SOUND.play()
 
     def take_damage(self):
         if self.is_big:
             self.is_big = False
-            self.image = IMAGES["player_small"]
-            self.rect = self.image.get_rect()
+            self.image = self.img_small
             self.is_invincible = True
             self.invincible_timer = FPS * 2
-            SOUNDS["hit"].play()
             return False
         else:
-            SOUNDS["hit"].play()
             return True
 
     def update(self, platforms):
@@ -146,189 +117,143 @@ class Player(Entity):
         self.vy += GRAVITY
         self.rect.y += self.vy
 
-        for platform in platforms:
-            if self.rect.colliderect(platform.rect):
+        for plat in platforms:
+            if self.rect.colliderect(plat.rect):
                 if self.vy > 0:
-                    self.rect.bottom = platform.rect.top
+                    self.rect.bottom = plat.rect.top
                     self.vy = 0
                     self.is_jumping = False
                 elif self.vy < 0:
-                    self.rect.top = platform.rect.bottom
+                    self.rect.top = plat.rect.bottom
                     self.vy = 0
 
         self.rect.x += self.vx
-        self.x_pos_temp = self.rect.x
-
-        for platform in platforms:
-            if self.rect.colliderect(platform.rect):
+        for plat in platforms:
+            if self.rect.colliderect(plat.rect):
                 if self.vx > 0:
-                    self.rect.right = platform.rect.left
+                    self.rect.right = plat.rect.left
                 elif self.vx < 0:
-                    self.rect.left = platform.rect.right
+                    self.rect.left = plat.rect.right
 
         if self.is_invincible:
             self.invincible_timer -= 1
             if self.invincible_timer <= 0:
                 self.is_invincible = False
 
-
 class Enemy(Entity):
-    def __init__(self, x, y):
-        super().__init__(x, y, IMAGES["enemy"])
+    def __init__(self, x, y, image):
+        super().__init__(x, y, image)
         self.vx = -ENEMY_SPEED
 
     def update(self, platforms):
         self.vy += GRAVITY
         self.rect.y += self.vy
-        for platform in platforms:
-            if self.rect.colliderect(platform.rect) and self.vy > 0:
-                self.rect.bottom = platform.rect.top
+        for plat in platforms:
+            if self.rect.colliderect(plat.rect) and self.vy > 0:
+                self.rect.bottom = plat.rect.top
                 self.vy = 0
         self.rect.x += self.vx
-        for platform in platforms:
-            if self.rect.colliderect(platform.rect):
+        for plat in platforms:
+            if self.rect.colliderect(plat.rect):
                 self.vx *= -1
                 self.rect.x += self.vx
 
-
 class Item(Entity):
-    def __init__(self, x, y, type):
-        image = IMAGES[type]
+    def __init__(self, x, y, type, image):
         super().__init__(x, y, image)
         self.type = type
 
-
-# --- Menu & UI Functions ---
-def draw_text(surface, text, size, x, y, color=(255, 255, 255)):
-    font = pygame.font.SysFont("Arial", size, bold=True)
-    text_surface = font.render(text, True, color)
-    text_rect = text_surface.get_rect()
-    text_rect.center = (x, y)
-    surface.blit(text_surface, text_rect)
-
+# --- UI ---
+def draw_text(surface, text, size, x, y, color):
+    font = pygame.font.SysFont('Arial', size, bold=True)
+    surf = font.render(text, True, color)
+    rect = surf.get_rect(center=(x, y))
+    surface.blit(surf, rect)
 
 def start_menu(screen):
-    colors = [(255, 0, 0), (255, 127, 0), (255, 255, 0), (0, 255, 0),
-              (0, 0, 255), (75, 0, 130), (148, 0, 211)]
-    menu_options = ["Start Game", "Load Game", "Settings", "Exit"]
+    colors = [(255,0,0),(0,255,0),(0,0,255),(255,255,0)]
     selected = 0
+    menu_items = ["Start Game","Load Game","Settings","Exit"]
     clock = pygame.time.Clock()
     running = True
-    color_index = 0
     while running:
-        screen.fill((107, 140, 255))
-        color_index = (color_index + 1) % len(colors)
-        draw_text(screen, "RUN MEDHA RUN", 80, SCREEN_WIDTH//2, 100, colors[color_index])
-        for i, option in enumerate(menu_options):
-            color = (255, 255, 0) if i == selected else (255, 255, 255)
-            draw_text(screen, option, 50, SCREEN_WIDTH//2, 250 + i*70, color)
+        screen.fill((0,0,0))
+        draw_text(screen, "RUN MEDHA RUN", 60, SCREEN_WIDTH//2, 80, colors[random.randint(0,3)])
+        for i, item in enumerate(menu_items):
+            color = (255,255,255) if i != selected else (255,215,0)
+            draw_text(screen, item, 40, SCREEN_WIDTH//2, 200 + i*60, color)
         pygame.display.flip()
-        clock.tick(10)
 
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_DOWN:
-                    selected = (selected + 1) % len(menu_options)
-                elif event.key == pygame.K_UP:
-                    selected = (selected - 1) % len(menu_options)
+            if event.type == pygame.QUIT: pygame.quit(); sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    selected = (selected - 1) % len(menu_items)
+                elif event.key == pygame.K_DOWN:
+                    selected = (selected + 1) % len(menu_items)
                 elif event.key == pygame.K_RETURN:
-                    if menu_options[selected] == "Start Game":
-                        return "start"
-                    elif menu_options[selected] == "Load Game":
-                        return "load"
-                    elif menu_options[selected] == "Settings":
-                        return "settings"
-                    elif menu_options[selected] == "Exit":
-                        pygame.quit()
-                        sys.exit()
+                    if menu_items[selected] == "Start Game": return
+                    elif menu_items[selected] == "Exit": pygame.quit(); sys.exit()
+        clock.tick(15)
 
-
-# --- Level Functions ---
-def build_level(level_template, all_sprites, platforms, enemies, items):
-    level_width = len(level_template[0]) * TILE_SIZE
-    for r, row in enumerate(level_template):
-        for c, char in enumerate(row):
-            x = c * TILE_SIZE
-            y = r * TILE_SIZE
-            if char == "W":
-                p = Entity(x, y, IMAGES["brick"])
-                platforms.add(p)
-                all_sprites.add(p)
-            elif char == "P":
-                p = Entity(x, y, IMAGES["pipe"])
-                platforms.add(p)
-                all_sprites.add(p)
-            elif char == "E":
-                e = Enemy(x, y)
-                enemies.add(e)
-                all_sprites.add(e)
-            elif char == "M":
-                i = Item(x, y, "mushroom")
-                items.add(i)
-                all_sprites.add(i)
-            elif char == "S":
-                i = Item(x, y, "star")
-                items.add(i)
-                all_sprites.add(i)
-            elif char == "F":
-                f = Entity(x, y, IMAGES["flag"])
-                platforms.add(f)
-                all_sprites.add(f)
-    return level_width
-
-
-def generate_level():
-    new_level = []
-    for row in BASE_LEVEL:
-        new_row = ""
-        for char in row:
-            if char == "E" and random.random() < 0.5:
-                new_row += "E"
-            elif char == "M" and random.random() < 0.5:
-                new_row += "M"
-            elif char == "S" and random.random() < 0.3:
-                new_row += "S"
-            else:
-                new_row += char
-        new_level.append(new_row)
-    return new_level
-
+# --- Infinite Level Generator ---
+def generate_level(width=20, height=12):
+    tiles = []
+    for r in range(height):
+        row = []
+        for c in range(width):
+            if r == height-1: row.append("W")
+            elif random.random() < 0.02: row.append("P")
+            elif random.random() < 0.03: row.append("E")
+            elif random.random() < 0.03: row.append("M")
+            elif random.random() < 0.02: row.append("S")
+            else: row.append(" ")
+        tiles.append("".join(row))
+    # Add flag at end
+    for r in range(height-3, height):
+        tiles[r] = tiles[r][:-1] + "F"
+    return tiles
 
 # --- Main Game ---
 def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("RUN MEDHA RUN")
-    player = Player(100, 100)
+    pygame.display.set_caption("Run Medha Run")
+    clock = pygame.time.Clock()
 
-    # Play BGM
-    # SOUNDS["bgm"].play(-1)
-
-    # Start Menu
     start_menu(screen)
 
-    level_number = 1
-    while True:
+    level_count = 1
+    running = True
+
+    while running:
+        LEVEL_MAP = generate_level(width=30 + level_count*5, height=12)
+        level_width = len(LEVEL_MAP[0])*TILE_SIZE
+
         all_sprites = pygame.sprite.Group()
         platforms = pygame.sprite.Group()
         enemies = pygame.sprite.Group()
         items = pygame.sprite.Group()
+
+        player = Player(100, 100, MEDHA_IMG, MEDHA_BIG_IMG)
         all_sprites.add(player)
 
-        level_map = generate_level()
-        level_width = build_level(level_map, all_sprites, platforms, enemies, items)
-        camera = Camera(level_width, SCREEN_HEIGHT)
+        for r, row in enumerate(LEVEL_MAP):
+            for c, char in enumerate(row):
+                x, y = c*TILE_SIZE, r*TILE_SIZE
+                if char=="W": p=Entity(x,y,BRICK_IMG); platforms.add(p); all_sprites.add(p)
+                elif char=="P": p=Entity(x,y,PIPE_IMG); platforms.add(p); all_sprites.add(p)
+                elif char=="E": e=Enemy(x,y,GOOMBA_IMG); enemies.add(e); all_sprites.add(e)
+                elif char=="M": i=Item(x,y,'mushroom',MUSHROOM_IMG); items.add(i); all_sprites.add(i)
+                elif char=="S": i=Item(x,y,'star',STAR_IMG); items.add(i); all_sprites.add(i)
+                elif char=="F": f=Entity(x,y,FLAG_IMG); platforms.add(f); all_sprites.add(f)
 
+        camera = Camera(level_width, SCREEN_HEIGHT)
         level_running = True
-        clock = pygame.time.Clock()
+
         while level_running:
             clock.tick(FPS)
             for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
+                if event.type == pygame.QUIT: pygame.quit(); sys.exit()
 
             player.update(platforms)
             camera.update(player)
@@ -337,40 +262,38 @@ def main():
                 e.update(platforms)
 
             hit_item = pygame.sprite.spritecollide(player, items, True)
-            for item in hit_item:
-                player.power_up(item.type)
-                SOUNDS["coin"].play()
+            for item in hit_item: player.power_up(item.type)
 
             for enemy in enemies:
                 if player.rect.colliderect(enemy.rect):
-                    if player.vy > 0 and player.rect.bottom < enemy.rect.centery + 15:
+                    if player.vy > 0 and player.rect.bottom < enemy.rect.centery:
                         enemy.kill()
                         player.vy = -10
                         player.score += 100
-                    elif not player.is_invincible:
-                        dead = player.take_damage()
-                        if dead:
-                            draw_text(screen, "GAME OVER", 60, SCREEN_WIDTH//2, SCREEN_HEIGHT//2, (255, 0, 0))
-                            pygame.display.flip()
-                            pygame.time.wait(3000)
-                            pygame.quit()
-                            sys.exit()
+                        if COIN_SOUND: COIN_SOUND.play()
+                    else:
+                        if not player.is_invincible:
+                            dead = player.take_damage()
+                            if dead:
+                                draw_text(screen,"GAME OVER",80,SCREEN_WIDTH//2,SCREEN_HEIGHT//2,(255,0,0))
+                                pygame.display.flip()
+                                pygame.time.wait(3000)
+                                pygame.quit()
+                                sys.exit()
 
             if player.rect.x > level_width - 250:
-                draw_text(screen, f"LEVEL {level_number} CLEARED!", 60, SCREEN_WIDTH//2, SCREEN_HEIGHT//2, (0, 255, 0))
+                draw_text(screen, f"LEVEL {level_count} CLEARED!", 60, SCREEN_WIDTH//2, SCREEN_HEIGHT//2,(0,255,0))
                 pygame.display.flip()
                 pygame.time.wait(2000)
-                player.rect.x = 100
-                level_number += 1
                 level_running = False
+                level_count += 1
 
-            screen.fill((107, 140, 255))
+            screen.fill((107,140,255))  # Sky Blue
             for sprite in all_sprites:
                 screen.blit(sprite.image, camera.apply(sprite))
-            draw_text(screen, f"Score: {player.score}", 30, 80, 20, (0, 0, 0))
-            draw_text(screen, f"Level: {level_number}", 30, 700, 20, (0, 0, 0))
+            draw_text(screen,f"Score: {player.score}",30,80,20,(255,255,255))
+
             pygame.display.flip()
 
-
-if __name__ == "__main__":
+if __name__=="__main__":
     main()
