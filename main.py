@@ -1,10 +1,8 @@
 import os
-os.environ["PYGBAG_NO_ARCHIVE"] = "1"  # tells pygbag to skip APK archive
-
+os.environ["PYGBAG_NO_ARCHIVE"] = "1"  # Skip APK archive for pygbag/web build
 
 import pygame
 import sys
-import os
 import random
 
 # --- Initialization ---
@@ -33,11 +31,11 @@ CLOUD_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "cloud.png")).convert_al
 QUESTIONMARK_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "questionmark.png")).convert_alpha()
 PLANT_IMG = pygame.image.load(os.path.join(ASSETS_PATH, "plant.png")).convert_alpha()
 
-# --- Load Sounds (placeholders) ---
-JUMP_SOUND = pygame.mixer.Sound(os.path.join(ASSETS_PATH, "jump.wav")) if os.path.exists(os.path.join(ASSETS_PATH, "jump.wav")) else None
-COIN_SOUND = pygame.mixer.Sound(os.path.join(ASSETS_PATH, "coin.wav")) if os.path.exists(os.path.join(ASSETS_PATH, "coin.wav")) else None
-POWERUP_SOUND = pygame.mixer.Sound(os.path.join(ASSETS_PATH, "powerup.wav")) if os.path.exists(os.path.join(ASSETS_PATH, "powerup.wav")) else None
-HIT_SOUND = pygame.mixer.Sound(os.path.join(ASSETS_PATH, "hit.wav")) if os.path.exists(os.path.join(ASSETS_PATH, "hit.wav")) else None
+# --- Load Sounds (.ogg for web) ---
+JUMP_SOUND = pygame.mixer.Sound(os.path.join(ASSETS_PATH, "jump.ogg")) if os.path.exists(os.path.join(ASSETS_PATH, "jump.ogg")) else None
+COIN_SOUND = pygame.mixer.Sound(os.path.join(ASSETS_PATH, "coin.ogg")) if os.path.exists(os.path.join(ASSETS_PATH, "coin.ogg")) else None
+POWERUP_SOUND = pygame.mixer.Sound(os.path.join(ASSETS_PATH, "powerup.ogg")) if os.path.exists(os.path.join(ASSETS_PATH, "powerup.ogg")) else None
+HIT_SOUND = pygame.mixer.Sound(os.path.join(ASSETS_PATH, "hit.ogg")) if os.path.exists(os.path.join(ASSETS_PATH, "hit.ogg")) else None
 
 # --- Physics Settings ---
 GRAVITY = 0.8
