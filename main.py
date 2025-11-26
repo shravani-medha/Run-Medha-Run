@@ -1,3 +1,7 @@
+import os
+os.environ["PYGBAG_NO_ARCHIVE"] = "1"  # tells pygbag to skip APK archive
+
+
 import pygame
 import sys
 import os
